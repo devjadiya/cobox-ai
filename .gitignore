@@ -1,0 +1,98 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# =========================
+# Environment & Secrets
+# =========================
+.env
+.env.*
+!.env.example
+
+# API keys / secrets (extra safety)
+*.key
+*.pem
+*.secret
+
+# =========================
+# Python build / packaging
+# =========================
+build/
+dist/
+.eggs/
+*.egg-info/
+pip-wheel-metadata/
+
+# =========================
+# Logs & runtime files
+# =========================
+*.log
+logs/
+uvicorn.log
+
+# =========================
+# Test / Coverage
+# =========================
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# =========================
+# OS / Editor
+# =========================
+# Windows
+Thumbs.db
+Desktop.ini
+
+# VS Code
+.vscode/
+
+# PyCharm
+.idea/
+
+# =========================
+# Cache / Temp
+# =========================
+.cache/
+.mypy_cache/
+ruff_cache/
+
+# =========================
+# Game / AI Generated Outputs
+# =========================
+generated/
+outputs/
+scenes/
+tmp/
+temp/
+
+# =========================
+# Data Artifacts (generated, not source)
+# =========================
+app/data/assets.json
+app/data/asset_index.json
+
+# Keep source CSV only
+!app/assets/library.csv
+
+# =========================
+# Docker
+# =========================
+docker-compose.override.yml
+*.pid
+
+# =========================
+# AWS / Deployment
+# =========================
+.elasticbeanstalk/
+.aws/
