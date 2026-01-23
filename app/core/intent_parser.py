@@ -1,31 +1,78 @@
-from app.core.llm_client import get_llm_client
-from app.settings import settings
+# app/core/intent_parser.py
 
-INTENT_SYSTEM_PROMPT = """
-You are a game intent parser.
-Extract ONLY structured JSON.
-No explanations.
-"""
+import re
+from typing import Dict
+from app.core.intent_schema import SceneIntent, ObjectIntent
+from app.llm.deepseek_client import DeepSeekClient
 
-def parse_intent(user_text: str) -> dict:
-    client = get_llm_client()
 
-    if client is None:
-        # Safe fallback (system still runs)
-        return {
-            "objects": [],
-            "note": "LLM not configured"
-        }
+# ---------- RULE BASED PARSER (PRIMARY) ----------
 
-    response = client.chat.completions.create(
-        model=settings.DEEPSEEK_MODEL,
-        temperature=0.0,
-        response_format={"type": "json_object"},
-        messages=[
-            {"role": "system", "content": INTENT_SYSTEM_PROMPT},
-            {"role": "user", "content": user_text}
-        ],
-        max_tokens=1024
+OBJECT_KEYWORDS = {
+    "building": ["building", "house", "tower"],
+    "road": ["road", "street", "path"],
+    "tree": ["tree", "trees"],
+    "door": ["door", "doors"],
+    "wall": ["wall", "walls"],
+    "floor": ["floor", "floors"],
+    "vehicle": ["car", "vehicle"],
+}
+
+
+SCENE_KEYWORDS = {
+    "city": ["city", "town"],
+    "track": ["race", "track"],
+    "building": ["building"],
+    "open_world": ["open world"],
+}
+
+
+def _extract_count(text: str, word: str) -> int:
+    """
+    Extracts numeric counts like:
+    - '3 buildings' → 3
+    - defaults to 1 if not found
+    """
+    match = re.search(rf"(\d+)\s+{word}", text)
+    if match:
+        return int(match.group(1))
+    return 1
+
+
+def parse_intent(text: str) -> Dict:
+    text = text.lower()
+
+    # ---------- scene type ----------
+    scene_type = "custom"
+    for s_type, keywords in SCENE_KEYWORDS.items():
+        if any(keyword in text for keyword in keywords):
+            scene_type = s_type
+            break
+
+    objects = []
+
+    for obj_type, keywords in OBJECT_KEYWORDS.items():
+        if any(keyword in text for keyword in keywords):
+            count = 1
+            for keyword in keywords:
+                count = max(count, _extract_count(text, keyword))
+            objects.append(
+                ObjectIntent(type=obj_type, count=count)
+            )
+
+    # ---------- fallback to AI if NOTHING found ----------
+    if not objects:
+        try:
+            llm = DeepSeekClient()
+            ai_intent = llm.parse_intent_sync(text)
+            return ai_intent
+        except Exception:
+            pass
+
+    intent = SceneIntent(
+        scene_type=scene_type,
+        objects=objects,
+        notes="rule_based",
     )
 
-    return response.choices[0].message.content
+    return intent.model_dump()
