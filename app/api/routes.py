@@ -21,17 +21,29 @@ def ai_command(req: CommandRequest, request: Request):
     Main AI entrypoint.
     """
 
+    print("\n=== AI COMMAND RECEIVED ===")
+    print("Raw text:", req.text)
+
     clean_text = sanitize_text(req.text)
+    print("Sanitized text:", clean_text)
 
     # IMPORTANT: parse_intent is SYNC
     intent = parse_intent(clean_text)
+    print("Parsed intent:", intent)
 
     assets = resolve_assets(
         intent=intent,
         asset_index=request.app.state.asset_index
     )
+    print(f"Resolved {len(assets)} assets")
+    for asset in assets:
+        print(" - Asset:", asset.get("id"), "| category:", asset.get("category"))
 
     scene = compile_scene(intent, assets)
+    print("Scene compiled:", scene["scene_id"])
+    print(f"Actors in scene: {len(scene.get('actors', []))}")
+
+    print("=== AI COMMAND COMPLETE ===\n")
 
     return {
         "status": "ok",
