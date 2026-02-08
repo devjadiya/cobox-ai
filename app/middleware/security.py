@@ -1,3 +1,4 @@
-from app.llm.openai_client import enhance_scene
-
-scene = enhance_scene(scene, intent.get("notes",""))
+def limit_scene(scene: dict):
+    if len(scene.get("actors", [])) > 800:
+        scene["actors"] = scene["actors"][:800]
+    return scene

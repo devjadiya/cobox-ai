@@ -1,6 +1,6 @@
-# app/core/scene_compiler.py
-
 import uuid
+import random
+import math
 from typing import Dict, List
 
 
@@ -8,176 +8,21 @@ def _uid(prefix: str) -> str:
     return f"{prefix}-{uuid.uuid4().hex[:8]}"
 
 
-def compile_scene(intent: Dict, assets: List[Dict]) -> Dict:
-    """
-    Converts intent + resolved assets into a spatially-correct Unreal-ready scene.
-    Buildings are generated as grouped structures (floor + walls + ceiling + door).
-    """
-
-    scene_id = _uid("scene")
-
-    scene = {
-        "scene_id": scene_id,
-        "scene_type": intent.get("scene_type", "generic"),
-        "lighting": {
-            "brightness": 10,
-            "temperature": 46.6,
-            "time_of_day": 6.82,
-            "sun_angle": 0
-        },
-        "fog": {
-            "density": 0.02,
-            "ray_density": 0.02,
-            "height": 0.2
-        },
-        "actors": [],
-        "rules": {
-            "allow_physics": intent.get("allow_physics", False),
-            "allow_ai_agents": intent.get("allow_ai_agents", False),
-            "allow_multiplayer": intent.get("allow_multiplayer", False)
-        }
-    }
-
-    # -----------------------------
-    # ASSET LOOKUP BY CATEGORY
-    # -----------------------------
-    asset_lookup = {}
-    for asset in assets:
-        asset_lookup.setdefault(asset["category"], []).append(asset)
-
-    def get_asset(category: str, index: int = 0):
-        pool = asset_lookup.get(category, [])
-        if not pool:
-            return None
-        return pool[index % len(pool)]
-
-    # -----------------------------
-    # SPATIAL CONSTANTS (UNREAL UNITS)
-    # -----------------------------
-    BUILDING_SPACING_X = 6000
-    BUILDING_SPACING_Y = 0
-
-    WALL_OFFSET = 600
-    CEILING_Z = 400
-    DOOR_OFFSET_Y = 650
-
-    TREE_SPACING = 1200
-    ROAD_SPACING = 8000
-
-    cursor_x = 0
-    cursor_y = 0
-
-    # -----------------------------
-    # BUILDINGS
-    # -----------------------------
-    for obj in intent.get("objects", []):
-        if obj["type"] != "building":
-            continue
-
-        building_count = obj.get("count", 1)
-
-        floors = asset_lookup.get("floor", [])
-        walls = asset_lookup.get("wall", [])
-        ceilings = asset_lookup.get("ceiling", [])
-        doors = asset_lookup.get("door", [])
-
-        if not floors or not walls:
-            continue  # cannot form buildings
-
-        for b in range(building_count):
-            base_x = cursor_x
-            base_y = cursor_y
-
-            # FLOOR
-            floor_asset = floors[b % len(floors)]
-            scene["actors"].append(_actor(floor_asset, "floor", base_x, base_y, 0))
-
-            # WALLS (4 sides)
-            wall_positions = [
-                (0, WALL_OFFSET),
-                (0, -WALL_OFFSET),
-                (WALL_OFFSET, 0),
-                (-WALL_OFFSET, 0),
-            ]
-
-            for i, (dx, dy) in enumerate(wall_positions):
-                wall_asset = walls[i % len(walls)]
-                scene["actors"].append(
-                    _actor(wall_asset, "wall", base_x + dx, base_y + dy, 0)
-                )
-
-            # CEILING
-            if ceilings:
-                ceiling_asset = ceilings[b % len(ceilings)]
-                scene["actors"].append(
-                    _actor(ceiling_asset, "ceiling", base_x, base_y, CEILING_Z)
-                )
-
-            # DOOR (front)
-            if doors:
-                door_asset = doors[b % len(doors)]
-                scene["actors"].append(
-                    _actor(door_asset, "door", base_x, base_y + DOOR_OFFSET_Y, 0)
-                )
-
-            cursor_x += BUILDING_SPACING_X
-
-        cursor_y += BUILDING_SPACING_Y
-
-    # -----------------------------
-    # ROADS
-    # -----------------------------
-    for obj in intent.get("objects", []):
-        if obj["type"] != "road":
-            continue
-
-        road_assets = asset_lookup.get("road") or asset_lookup.get("track", [])
-        if not road_assets:
-            continue
-
-        road_asset = road_assets[0]
-        scene["actors"].append(
-            _actor(road_asset, "road", 0, -ROAD_SPACING, 0)
-        )
-
-    # -----------------------------
-    # TREES (DECOR AS TREE)
-    # -----------------------------
-    for obj in intent.get("objects", []):
-        if obj["type"] != "tree":
-            continue
-
-        tree_assets = asset_lookup.get("tree") or asset_lookup.get("decor", [])
-        count = obj.get("count", 1)
-
-        if not tree_assets:
-            continue
-
-        tx = 0
-        for i in range(count):
-            asset = tree_assets[i % len(tree_assets)]
-            scene["actors"].append(
-                _actor(asset, "tree", tx, ROAD_SPACING // 2, 0)
-            )
-            tx += TREE_SPACING
-
-    return scene
-
-
 # -------------------------------------------------
 # ACTOR FACTORY
 # -------------------------------------------------
-def _actor(asset: Dict, category: str, x: int, y: int, z: int) -> Dict:
+def _actor(asset: Dict, category: str, x: int, y: int, z: int,
+           yaw: int = 0, scale: float = 1.0) -> Dict:
     return {
         "actor_id": _uid("actor"),
         "asset_id": asset["id"],
-        "name": f"{category}",
+        "name": category,
         "category": category,
         "blueprint": asset["blueprint"],
         "transform": {
             "location": {"x": x, "y": y, "z": z},
-            "rotation": {"pitch": 0, "yaw": 0, "roll": 0},
-            "scale": {"x": 1, "y": 1, "z": 1},
+            "rotation": {"pitch": 0, "yaw": yaw, "roll": 0},
+            "scale": {"x": scale, "y": scale, "z": scale},
         },
         "physics": {
             "enabled": False,
@@ -190,6 +35,175 @@ def _actor(asset: Dict, category: str, x: int, y: int, z: int) -> Dict:
         },
     }
 
-from app.llm.openai_client import enhance_scene
 
-scene = enhance_scene(scene, intent.get("notes",""))
+# -------------------------------------------------
+# MAIN COMPILER
+# -------------------------------------------------
+def compile_scene(intent: Dict, assets: List[Dict]) -> Dict:
+
+    scene_id = _uid("scene")
+
+    scene = {
+        "scene_id": scene_id,
+        "scene_type": intent.get("scene_type", "generic"),
+        "lighting": {
+            "brightness": random.randint(8, 14),
+            "temperature": random.uniform(35, 60),
+            "time_of_day": random.uniform(5, 18),
+            "sun_angle": random.randint(0, 360),
+        },
+        "fog": {
+            "density": 0.02,
+            "ray_density": 0.02,
+            "height": 0.2,
+        },
+        "actors": [],
+        "rules": {
+            "allow_physics": False,
+            "allow_ai_agents": False,
+            "allow_multiplayer": False,
+        },
+    }
+
+    # -----------------------------
+    # ASSET LOOKUP
+    # -----------------------------
+    asset_lookup = {}
+    for asset in assets:
+        asset_lookup.setdefault(asset["category"], []).append(asset)
+
+    def pick(cat):
+        pool = asset_lookup.get(cat, [])
+        return random.choice(pool) if pool else None
+
+    # -----------------------------
+    # BUILDINGS
+    # -----------------------------
+    building_count = 0
+    for obj in intent.get("objects", []):
+        if obj["type"] == "building":
+            building_count += obj.get("count", 1)
+
+    if building_count > 0:
+        rows = math.ceil(math.sqrt(building_count))
+        spacing = 8000
+        idx = 0
+
+        for r in range(rows):
+            for c in range(rows):
+                if idx >= building_count:
+                    break
+
+                base_x = r * spacing
+                base_y = c * spacing
+                floors_count = random.randint(1, 3)
+                yaw = random.choice([0, 90, 180, 270])
+
+                for f in range(floors_count):
+                    z = f * 400
+
+                    floor_asset = pick("floor")
+                    if floor_asset:
+                        scene["actors"].append(
+                            _actor(floor_asset, "floor", base_x, base_y, z, yaw)
+                        )
+
+                    # walls
+                    for dx, dy in [(600, 0), (-600, 0), (0, 600), (0, -600)]:
+                        wall_asset = pick("wall")
+                        if wall_asset:
+                            scene["actors"].append(
+                                _actor(
+                                    wall_asset,
+                                    "wall",
+                                    base_x + dx,
+                                    base_y + dy,
+                                    z,
+                                    yaw,
+                                )
+                            )
+
+                ceiling_asset = pick("ceiling")
+                if ceiling_asset:
+                    scene["actors"].append(
+                        _actor(
+                            ceiling_asset,
+                            "ceiling",
+                            base_x,
+                            base_y,
+                            floors_count * 400,
+                            yaw,
+                        )
+                    )
+
+                door_asset = pick("door")
+                if door_asset:
+                    side = random.choice([(650, 0), (-650, 0), (0, 650), (0, -650)])
+                    scene["actors"].append(
+                        _actor(
+                            door_asset,
+                            "door",
+                            base_x + side[0],
+                            base_y + side[1],
+                            0,
+                            yaw,
+                        )
+                    )
+
+                idx += 1
+
+    # -----------------------------
+    # ROADS / TRACKS
+    # -----------------------------
+    for obj in intent.get("objects", []):
+        if obj["type"] in ["road", "track"]:
+            track_asset = pick("track")
+            if track_asset:
+                for i in range(3):
+                    scene["actors"].append(
+                        _actor(track_asset, "track", i * 6000, -8000, 0)
+                    )
+
+    # -----------------------------
+    # TREES / FOLIAGE
+    # -----------------------------
+    tree_assets = asset_lookup.get("tree") or asset_lookup.get("decor", [])
+    if tree_assets:
+        for _ in range(80):
+            asset = random.choice(tree_assets)
+            scene["actors"].append(
+                _actor(
+                    asset,
+                    "tree",
+                    random.randint(-20000, 20000),
+                    random.randint(-20000, 20000),
+                    0,
+                    random.randint(0, 360),
+                    random.uniform(0.8, 1.3),
+                )
+            )
+
+    # -----------------------------
+    # DECOR
+    # -----------------------------
+    decor_assets = asset_lookup.get("decor", [])
+    for _ in range(40):
+        if decor_assets:
+            asset = random.choice(decor_assets)
+            scene["actors"].append(
+                _actor(
+                    asset,
+                    "decor",
+                    random.randint(-15000, 15000),
+                    random.randint(-15000, 15000),
+                    0,
+                    random.randint(0, 360),
+                )
+            )
+
+    # -----------------------------
+    # EXPORT
+    # -----------------------------
+    from app.core.engine_exporter import export_to_engine
+
+    return export_to_engine(scene)

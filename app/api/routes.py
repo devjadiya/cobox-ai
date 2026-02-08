@@ -6,6 +6,7 @@ from app.middleware.sanitization import sanitize_text
 from app.core.intent_parser import parse_intent
 from app.core.asset_resolver import resolve_assets
 from app.core.scene_compiler import compile_scene
+from app.core.exporter import export_scene
 
 router = APIRouter(prefix="/ai")
 
@@ -31,6 +32,10 @@ async def ai_command(req: CommandRequest, request: Request):
 
         scene = compile_scene(intent, assets)
         log(job_id, "Scene compiled")
+
+        file_path = export_scene(scene)
+        log(job_id, f"Scene exported: {file_path}")
+
 
         update_job(job_id, status="done", result=scene)
 
