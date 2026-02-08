@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
+from fastapi.responses import JSONResponse
 
 from app.core.job_manager import create_job, update_job, log, JOBS, cancel
 from app.middleware.sanitization import sanitize_text
@@ -60,3 +61,26 @@ def cancel_job(job_id: str):
 @router.get("/logs/{job_id}")
 def logs(job_id: str):
     return JOBS[job_id]["logs"]
+
+@router.get("/result/{job_id}")
+def result(job_id: str):
+    job = JOBS.get(job_id)
+
+    if not job:
+        return {"error": "not found"}
+
+    if job["status"] != "done":
+        return {"status": job["status"]}
+
+    return JSONResponse(content=job["result"])
+    # return job["result"]
+
+@router.post("/instant")
+async def instant(req: CommandRequest, request: Request):
+    text = sanitize_text(req.text)
+    intent = parse_intent(text)
+    assets = resolve_assets(intent, request.app.state.asset_index)
+    scene = compile_scene(intent, assets)
+
+    return JSONResponse(content=scene)
+    # return scene
