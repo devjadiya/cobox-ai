@@ -189,3 +189,7 @@ def _actor(asset: Dict, category: str, x: int, y: int, z: int) -> Dict:
             "hidden_in_game": False,
         },
     }
+
+from app.llm.openai_client import enhance_scene
+
+scene = enhance_scene(scene, intent.get("notes",""))

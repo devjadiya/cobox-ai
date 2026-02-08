@@ -1,8 +1,7 @@
-# app/api/routes.py
-
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
+from app.core.job_manager import create_job, update_job, log, JOBS, cancel
 from app.middleware.sanitization import sanitize_text
 from app.core.intent_parser import parse_intent
 from app.core.asset_resolver import resolve_assets
@@ -16,38 +15,43 @@ class CommandRequest(BaseModel):
 
 
 @router.post("/command")
-def ai_command(req: CommandRequest, request: Request):
-    """
-    Main AI entrypoint.
-    """
+async def ai_command(req: CommandRequest, request: Request):
+    job_id = create_job()
 
-    print("\n=== AI COMMAND RECEIVED ===")
-    print("Raw text:", req.text)
+    try:
+        update_job(job_id, status="running")
 
-    clean_text = sanitize_text(req.text)
-    print("Sanitized text:", clean_text)
+        text = sanitize_text(req.text)
+        log(job_id, "Intent parsed")
 
-    # IMPORTANT: parse_intent is SYNC
-    intent = parse_intent(clean_text)
-    print("Parsed intent:", intent)
+        intent = parse_intent(text)
 
-    assets = resolve_assets(
-        intent=intent,
-        asset_index=request.app.state.asset_index
-    )
-    print(f"Resolved {len(assets)} assets")
-    for asset in assets:
-        print(" - Asset:", asset.get("id"), "| category:", asset.get("category"))
+        assets = resolve_assets(intent, request.app.state.asset_index)
+        log(job_id, f"Assets resolved: {len(assets)}")
 
-    scene = compile_scene(intent, assets)
-    print("Scene compiled:", scene["scene_id"])
-    print(f"Actors in scene: {len(scene.get('actors', []))}")
+        scene = compile_scene(intent, assets)
+        log(job_id, "Scene compiled")
 
-    print("=== AI COMMAND COMPLETE ===\n")
+        update_job(job_id, status="done", result=scene)
 
-    return {
-        "status": "ok",
-        "intent": intent,
-        "assets": assets,
-        "scene": scene
-    }
+    except Exception as e:
+        update_job(job_id, status="error")
+        log(job_id, str(e))
+
+    return {"job_id": job_id}
+
+
+@router.get("/status/{job_id}")
+def status(job_id: str):
+    return JOBS.get(job_id, {"error": "not found"})
+
+
+@router.post("/cancel/{job_id}")
+def cancel_job(job_id: str):
+    cancel(job_id)
+    return {"status": "cancelled"}
+
+
+@router.get("/logs/{job_id}")
+def logs(job_id: str):
+    return JOBS[job_id]["logs"]
