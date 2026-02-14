@@ -6,7 +6,7 @@ app = FastAPI(title="Cobox AI", version="0.1.0")
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok v1.0.0"}
 
 app.include_router(instant_router)
 app.include_router(async_router)
