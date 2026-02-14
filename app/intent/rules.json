@@ -1,0 +1,6 @@
+{
+  "small_house": { "grid": [2,2], "floors": 1, "doors": 1, "trees": 3 },
+  "big_house": { "grid": [5,5], "floors": 2, "doors": 2, "trees": 6 },
+  "city_building": { "grid": [5,5], "floors": 5, "doors": 4, "trees": 10 },
+  "tree_city": { "grid": [1,1], "floors": 0, "doors": 0, "trees": 50 }
+}
