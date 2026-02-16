@@ -1,4 +1,4 @@
-# 🚀 Cobox AI Backend - Production
+# 🚀 Cobox AI Backend
 
 Production URL:
 
