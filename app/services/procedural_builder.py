@@ -2,6 +2,16 @@ from app.services.asset_utils import make_asset
 from app.services.asset_registry import AssetRegistry
 import random
 
+# ------------------------------------------------------
+# OPTIONAL TREE BEAUTIFIER (SAFE IMPORT)
+# ------------------------------------------------------
+try:
+    from app.services.tree_beautifier import beautify_trees
+    TREE_SYSTEM_AVAILABLE = True
+except Exception:
+    TREE_SYSTEM_AVAILABLE = False
+
+
 registry = AssetRegistry()
 
 TILE_SIZE = 500
@@ -10,7 +20,7 @@ CEIL_Z = 400
 
 
 # ======================================================
-# HOUSE STYLE SYSTEM (NEW)
+# HOUSE STYLE SYSTEM
 # ======================================================
 
 def choose_house_style():
@@ -78,23 +88,38 @@ def build_house(size=2, floors=1, center_x=0, center_y=0):
 
         # TOP
         assets.append(
-            make_asset("Wall", WALL_PATH,
-                       wx, max_y + HALF_TILE,
-                       0, yaw=90)
+            make_asset(
+                "Wall",
+                WALL_PATH,
+                wx,
+                max_y + HALF_TILE,
+                0,
+                yaw=90
+            )
         )
 
         # BOTTOM (door center)
         if i == door_index:
             assets.append(
-                make_asset("Door", DOOR_PATH,
-                           wx, min_y - HALF_TILE,
-                           0, yaw=-90)
+                make_asset(
+                    "Door",
+                    DOOR_PATH,
+                    wx,
+                    min_y - HALF_TILE,
+                    0,
+                    yaw=-90
+                )
             )
         else:
             assets.append(
-                make_asset("Wall", WALL_PATH,
-                           wx, min_y - HALF_TILE,
-                           0, yaw=-90)
+                make_asset(
+                    "Wall",
+                    WALL_PATH,
+                    wx,
+                    min_y - HALF_TILE,
+                    0,
+                    yaw=-90
+                )
             )
 
     # ---------------- SIDE WALLS ----------------
@@ -103,15 +128,44 @@ def build_house(size=2, floors=1, center_x=0, center_y=0):
         wy = cy + j * TILE_SIZE
 
         assets.append(
-            make_asset("Wall", WALL_PATH,
-                       min_x - HALF_TILE, wy,
-                       0, yaw=180)
+            make_asset(
+                "Wall",
+                WALL_PATH,
+                min_x - HALF_TILE,
+                wy,
+                0,
+                yaw=180
+            )
         )
 
         assets.append(
-            make_asset("Wall", WALL_PATH,
-                       max_x + HALF_TILE, wy,
-                       0, yaw=0)
+            make_asset(
+                "Wall",
+                WALL_PATH,
+                max_x + HALF_TILE,
+                wy,
+                0,
+                yaw=0
+            )
         )
+
+    # ==================================================
+    # TREE BEAUTIFIER INTEGRATION (NON-DESTRUCTIVE)
+    # ==================================================
+    if TREE_SYSTEM_AVAILABLE:
+        try:
+            tree_assets = beautify_trees(
+                center_x=center_x,
+                center_y=center_y,
+                house_size=size,
+                tile_size=TILE_SIZE
+            )
+
+            if tree_assets:
+                assets.extend(tree_assets)
+
+        except Exception:
+            # Never break house generation
+            pass
 
     return assets
