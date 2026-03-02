@@ -1,7 +1,6 @@
 from math import ceil, sqrt
 
 from app.services.procedural_builder import build_house
-from app.services.procedural_foliage import scatter_trees
 from app.services.default_properties import get_default_properties
 from app.services.ai_structure import generate_scene_plan
 
