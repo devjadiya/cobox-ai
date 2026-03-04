@@ -1,171 +1,86 @@
+# app/services/procedural_builder.py
+
 from app.services.asset_utils import make_asset
 from app.services.asset_registry import AssetRegistry
 import random
 
-# ------------------------------------------------------
-# OPTIONAL TREE BEAUTIFIER (SAFE IMPORT)
-# ------------------------------------------------------
-try:
-    from app.services.tree_beautifier import beautify_trees
-    TREE_SYSTEM_AVAILABLE = True
-except Exception:
-    TREE_SYSTEM_AVAILABLE = False
-
-
 registry = AssetRegistry()
 
-TILE_SIZE = 500
-HALF_TILE = TILE_SIZE / 2
+TILE = 500
+HALF = TILE / 2
 CEIL_Z = 400
 
 
-# ======================================================
-# HOUSE STYLE SYSTEM
-# ======================================================
+def choose_style(rng: random.Random):
 
-def choose_house_style():
-    """
-    Select ONE consistent asset kit per house.
-    """
-
-    floor = registry.random(registry.floors())
-    wall = registry.random(registry.walls())
-    door = registry.random(registry.doors())
-    ceiling = registry.random(registry.ceilings())
+    def pick(df):
+        if df is None or df.empty:
+            return None
+        rows = df.to_dict("records")
+        return rng.choice(rows).get("AssetToPlace")
 
     return {
-        "floor": floor,
-        "wall": wall,
-        "door": door,
-        "ceiling": ceiling
+        "floor": pick(registry.floors()),
+        "wall": pick(registry.walls()),
+        "door": pick(registry.doors()),
+        "ceiling": pick(registry.ceilings())
     }
 
 
-# ======================================================
-# HOUSE BUILDER
-# ======================================================
+def build_house(size=3, center_x=0, center_y=0, style_seed=0):
 
-def build_house(size=2, floors=1, center_x=0, center_y=0):
+    rng = random.Random(style_seed)
+    style = choose_style(rng)
 
-    style = choose_house_style()
-
-    FLOOR_PATH = style["floor"]
-    WALL_PATH = style["wall"]
-    DOOR_PATH = style["door"]
-    CEIL_PATH = style["ceiling"]
+    floor = style["floor"]
+    wall = style["wall"]
+    door = style["door"]
+    ceil = style["ceiling"]
 
     assets = []
 
-    cx = center_x
-    cy = center_y
+    cx, cy = center_x, center_y
 
-    # ---------------- FLOORS + CEILINGS ----------------
+    # Floors & Ceilings
     for i in range(size):
         for j in range(size):
 
-            fx = cx + i * TILE_SIZE
-            fy = cy + j * TILE_SIZE
+            x = cx + i * TILE
+            y = cy + j * TILE
 
-            assets.append(
-                make_asset("Floor", FLOOR_PATH, fx, fy, 0)
-            )
-
-            assets.append(
-                make_asset("Ceiling", CEIL_PATH, fx, fy, CEIL_Z)
-            )
+            assets.append(make_asset("Floor", floor, x, y, 0))
+            assets.append(make_asset("Ceiling", ceil, x, y, CEIL_Z))
 
     min_x = cx
-    max_x = cx + (size - 1) * TILE_SIZE
+    max_x = cx + (size - 1) * TILE
     min_y = cy
-    max_y = cy + (size - 1) * TILE_SIZE
+    max_y = cy + (size - 1) * TILE
 
-    door_index = size // 2
+    # deterministic door position
+    door_idx = size // 2
 
-    # ---------------- TOP & BOTTOM WALLS ----------------
+# -------- FRONT + BACK --------
+
     for i in range(size):
 
-        wx = cx + i * TILE_SIZE
+        x = cx + i * TILE
 
-        # TOP
-        assets.append(
-            make_asset(
-                "Wall",
-                WALL_PATH,
-                wx,
-                max_y + HALF_TILE,
-                0,
-                yaw=90
-            )
-        )
-
-        # BOTTOM (door center)
-        if i == door_index:
-            assets.append(
-                make_asset(
-                    "Door",
-                    DOOR_PATH,
-                    wx,
-                    min_y - HALF_TILE,
-                    0,
-                    yaw=-90
-                )
-            )
+        # FRONT WALL (faces player)
+        if i == door_idx:
+            assets.append(make_asset("Door", door, x, cy - HALF, 0, yaw=90))
         else:
-            assets.append(
-                make_asset(
-                    "Wall",
-                    WALL_PATH,
-                    wx,
-                    min_y - HALF_TILE,
-                    0,
-                    yaw=-90
-                )
-            )
+            assets.append(make_asset("Wall", wall, x, cy - HALF, 0, yaw=90))
 
-    # ---------------- SIDE WALLS ----------------
+        # BACK WALL
+        assets.append(make_asset("Wall", wall, x, cy + (size * TILE) - HALF, 0, yaw=-90))
+
+
+# -------- LEFT + RIGHT --------
+
     for j in range(size):
 
-        wy = cy + j * TILE_SIZE
+        y = cy + j * TILE
 
-        assets.append(
-            make_asset(
-                "Wall",
-                WALL_PATH,
-                min_x - HALF_TILE,
-                wy,
-                0,
-                yaw=180
-            )
-        )
-
-        assets.append(
-            make_asset(
-                "Wall",
-                WALL_PATH,
-                max_x + HALF_TILE,
-                wy,
-                0,
-                yaw=0
-            )
-        )
-
-    # ==================================================
-    # TREE BEAUTIFIER INTEGRATION (NON-DESTRUCTIVE)
-    # ==================================================
-    if TREE_SYSTEM_AVAILABLE:
-        try:
-            tree_assets = beautify_trees(
-                center_x=center_x,
-                center_y=center_y,
-                house_size=size,
-                tile_size=TILE_SIZE
-            )
-
-            if tree_assets:
-                assets.extend(tree_assets)
-
-        except Exception:
-            # Never break house generation
-            pass
-
+        assets.append(make_asset("Wall", wall, cx - HALF, y, 0, yaw=180))
+        assets.append(make_asset("Wall", wall, cx + (size * TILE) - HALF, y, 0, yaw=0))
     return assets

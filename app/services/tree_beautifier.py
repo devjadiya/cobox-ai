@@ -1,95 +1,48 @@
-import random
+# app/services/tree_beautifier.py
+
 import math
-from app.services.tree_presents import random_tree
+
+TREE_LIBRARY = [
+("SM_Env_Pine_01","/Game/Biomes/PNB_Alpine_Mountain/Models/Environment/SM_Env_Pine_01.SM_Env_Pine_01"),
+("SM_Env_Pine_02","/Game/Biomes/PNB_Alpine_Mountain/Models/Environment/SM_Env_Pine_02.SM_Env_Pine_02"),
+("SM_Env_Pine_03","/Game/Biomes/PNB_Alpine_Mountain/Models/Environment/SM_Env_Pine_03.SM_Env_Pine_03"),
+("SM_Env_Pine_04","/Game/Biomes/PNB_Alpine_Mountain/Models/Environment/SM_Env_Pine_04.SM_Env_Pine_04"),
+("SM_Env_Pine_05","/Game/Biomes/PNB_Alpine_Mountain/Models/Environment/SM_Env_Pine_05.SM_Env_Pine_05"),
+]
 
 
-# ======================================================
-# CONFIG
-# ======================================================
+def beautify_trees(houses, size, total_count, layout_rng, style_rng):
 
-HOUSE_SIZE = 1000          # approx 2x2 house footprint
-SAFE_MARGIN = 350
-RING_OFFSET = 500          # distance OUTSIDE house
-TREES_PER_HOUSE = 7
+    grouped = {}
 
+    if not houses:
+        houses = [(0,0)]
 
-# ======================================================
-# COLLISION CHECK
-# ======================================================
+    for _ in range(total_count):
 
-def inside_house(x, y, houses):
+        hx, hy = layout_rng.choice(houses)
 
-    half = (HOUSE_SIZE / 2) + SAFE_MARGIN
+        angle = layout_rng.uniform(0, 2 * math.pi)
+        radius = layout_rng.uniform(900, 1400)
 
-    for hx, hy in houses:
-        if hx - half <= x <= hx + half and \
-           hy - half <= y <= hy + half:
-            return True
+        x = hx + math.cos(angle) * radius
+        y = hy + math.sin(angle) * radius
 
-    return False
+        mesh, path = style_rng.choice(TREE_LIBRARY)
 
+        if mesh not in grouped:
+            grouped[mesh] = {
+                "StaticMesh": mesh,
+                "StaticMeshPath": path,
+                "Transforms": []
+            }
 
-# ======================================================
-# RING TREE SPAWNER
-# ======================================================
+        scale = style_rng.uniform(0.9, 1.6)
 
-def spawn_tree_ring(cx, cy, houses):
-
-    trees = []
-
-    for _ in range(TREES_PER_HOUSE):
-
-        # ⭐ spawn OUTSIDE building
-        angle = random.uniform(0, 2 * math.pi)
-
-        distance = (
-            HOUSE_SIZE / 2
-            + SAFE_MARGIN
-            + RING_OFFSET
-            + random.uniform(-150, 150)
-        )
-
-        x = cx + math.cos(angle) * distance
-        y = cy + math.sin(angle) * distance
-
-        # safety validation
-        if inside_house(x, y, houses):
-            continue
-
-        preset = random_tree()
-
-        trees.append({
-            "StaticMesh": preset["StaticMesh"],
-            "StaticMeshPath": preset["StaticMeshPath"],
-            "Instances": [{
-                "Location": {"X": x, "Y": y, "Z": 0},
-                "Rotation": {
-                    "Pitch": 0,
-                    "Yaw": random.uniform(0, 360),
-                    "Roll": 0
-                },
-                "Scale": {
-                    "X": random.uniform(*preset["scale"]),
-                    "Y": random.uniform(*preset["scale"]),
-                    "Z": random.uniform(*preset["scale"])
-                }
-            }]
+        grouped[mesh]["Transforms"].append({
+            "Location": {"X": x, "Y": y, "Z": 0},
+            "Rotation": {"Pitch": 0, "Yaw": style_rng.uniform(-180,180), "Roll": 0},
+            "Scale3D": {"X": scale, "Y": scale, "Z": scale}
         })
 
-    return trees
-
-
-# ======================================================
-# MAIN ENTRY
-# ======================================================
-
-def beautify_trees(house_positions):
-
-    foliage = []
-
-    for hx, hy in house_positions:
-        foliage.extend(
-            spawn_tree_ring(hx, hy, house_positions)
-        )
-
-    return foliage
+    return list(grouped.values())
